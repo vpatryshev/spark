@@ -17,9 +17,9 @@
 
 package org.apache.spark.sql.execution
 
-import org.apache.spark.{broadcast, TaskContext}
+import org.apache.spark.{broadcast, SparkEnv, TaskContext}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.{CodeGeneration, InternalRow}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.codegen._
 import org.apache.spark.sql.catalyst.plans.physical.Partitioning
@@ -35,6 +35,17 @@ import org.apache.spark.util.Utils
  * An interface for those physical operators that support codegen.
  */
 trait CodegenSupport extends SparkPlan {
+  lazy val codeGenerationFactory: CodeGeneration =
+    SparkEnv.get.conf.getOption("spark.sql.codegen.factory") flatMap {
+      className =>
+        try {
+          val clazz = Utils.classForName(className).asInstanceOf[Class[CodeGeneration]]
+
+          Some(clazz.getDeclaredConstructor().newInstance())
+        } catch {
+          case x: Exception => None
+        }
+    } getOrElse new CodeGeneration
 
   /** Prefix used in the current operator's variable names. */
   private def variablePrefix: String = this match {
@@ -309,7 +320,7 @@ case class WholeStageCodegenExec(child: SparkPlan) extends UnaryExecNode with Co
    * @return the tuple of the codegen context and the actual generated source.
    */
   def doCodeGen(): (CodegenContext, CodeAndComment) = {
-    val ctx = new CodegenContext
+    val ctx = codeGenerationFactory.context
     val code = child.asInstanceOf[CodegenSupport].produce(ctx, this)
     val source = s"""
       public Object generate(Object[] references) {

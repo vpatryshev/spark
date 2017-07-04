@@ -33,7 +33,7 @@ import scala.language.existentials
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.metrics.source.CodegenMetrics
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.{CodeGeneration, InternalRow}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
 import org.apache.spark.sql.types._
@@ -864,6 +864,21 @@ class CodeAndComment(val body: String, val comment: collection.Map[String, Strin
  */
 abstract class CodeGenerator[InType <: AnyRef, OutType <: AnyRef] extends Logging {
 
+  def codeGenerationFactory: CodeGeneration =
+    SparkEnv.get.conf.getOption("spark.sql.codegen.factory") flatMap {
+    className =>
+      try {
+        val clazz = Utils.classForName(className).asInstanceOf[Class[CodeGeneration]]
+
+        Some(clazz.getDeclaredConstructor().newInstance())
+      } catch {
+        case x: Exception => None
+      }
+
+      None
+  } getOrElse new CodeGeneration
+
+
   protected val genericMutableRowType: String = classOf[GenericInternalRow].getName
 
   /**
@@ -893,7 +908,7 @@ abstract class CodeGenerator[InType <: AnyRef, OutType <: AnyRef] extends Loggin
    * expressions that don't support codegen
    */
   def newCodeGenContext(): CodegenContext = {
-    new CodegenContext
+    codeGenerationFactory.context
   }
 }
 
