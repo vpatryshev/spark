@@ -29,6 +29,7 @@ import com.google.common.cache.{CacheBuilder, CacheLoader}
 import org.codehaus.janino.{ByteArrayClassLoader, ClassBodyEvaluator, SimpleCompiler}
 import org.codehaus.janino.util.ClassFile
 import scala.language.existentials
+import scala.util.Try
 
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
@@ -864,19 +865,17 @@ class CodeAndComment(val body: String, val comment: collection.Map[String, Strin
  */
 abstract class CodeGenerator[InType <: AnyRef, OutType <: AnyRef] extends Logging {
 
-  def codeGenerationFactory: CodeGeneration =
-    SparkEnv.get.conf.getOption("spark.sql.codegen.factory") flatMap {
-    className =>
-      try {
-        val clazz = Utils.classForName(className).asInstanceOf[Class[CodeGeneration]]
+  def codeGenerationFactory: CodeGeneration = {
+    val foundOrNot = for {
+      env <- Option(SparkEnv.get)
+      conf <- Option(env.conf)
+      className <- conf.getOption("spark.sql.codegen.factory")
+      clazz <- Try {Utils.classForName(className).asInstanceOf[Class[CodeGeneration]]}.toOption
+      instance <- Try {clazz.getDeclaredConstructor().newInstance()}.toOption
+    } yield instance
 
-        Some(clazz.getDeclaredConstructor().newInstance())
-      } catch {
-        case x: Exception => None
-      }
-
-      None
-  } getOrElse new CodeGeneration
+    foundOrNot getOrElse new CodeGeneration
+  }
 
 
   protected val genericMutableRowType: String = classOf[GenericInternalRow].getName
