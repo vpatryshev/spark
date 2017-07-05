@@ -16,10 +16,35 @@ import org.apache.spark.sql.execution.{WholeStageCodegenExec, debug}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.test.SharedSQLContext
 
+import scala.collection.mutable
+
 class TestCodegen extends CodeGeneration {
   override def context: CodegenContext = {
     Tracker.testCount += 1
-    new CodegenContext
+    new CodegenContext {
+      override def addReferenceObj(obj: Any): String = {
+        val idx = references.length
+        if (!references.contains(obj)) references += obj
+        val clsName = obj.getClass.getName
+        s"(($clsName) references[$idx])"
+      }
+
+      private val objectCache: mutable.Map[(String, Any), String] =
+        new mutable.HashMap[(String, Any), String]()
+      
+      override def addReferenceObj(name: String, obj: Any, className: String = null): String = {
+        objectCache.getOrElseUpdate((name, obj), super.addReferenceObj(name, obj, className))
+      }
+
+      private val udfCache: mutable.Map[(String, String), String] =
+        new mutable.HashMap[(String, String), String]()
+
+      override def addNewTerm(javaType: String, name: String, initCode: String => String): String =
+      {
+        val key = (name, initCode("`variable name`"))
+        udfCache.getOrElseUpdate(key, super.addNewTerm(javaType, name, initCode))
+      }
+    }
   }
 }
 
@@ -47,7 +72,6 @@ class CodeGenerationSpecialCasesSuite extends SparkFunSuite  with SharedSQLConte
   }
   
   test("sf#1") {
-    sparkConf.set("spark.sql.codegen.factory", "org.apache.spark.sql.TestCodegen")
     SparkEnv.get.conf.set("spark.sql.codegen.factory", "org.apache.spark.sql.TestCodegen")
     
     val ua = udf((i: Int) => Array(i))

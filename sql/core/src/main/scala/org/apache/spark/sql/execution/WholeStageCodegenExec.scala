@@ -36,16 +36,7 @@ import org.apache.spark.util.Utils
  */
 trait CodegenSupport extends SparkPlan {
   lazy val codeGenerationFactory: CodeGeneration =
-    SparkEnv.get.conf.getOption("spark.sql.codegen.factory") flatMap {
-      className =>
-        try {
-          val clazz = Utils.classForName(className).asInstanceOf[Class[CodeGeneration]]
-
-          Some(clazz.getDeclaredConstructor().newInstance())
-        } catch {
-          case x: Exception => None
-        }
-    } getOrElse new CodeGeneration
+    CodeGeneration.factory
 
   /** Prefix used in the current operator's variable names. */
   private def variablePrefix: String = this match {

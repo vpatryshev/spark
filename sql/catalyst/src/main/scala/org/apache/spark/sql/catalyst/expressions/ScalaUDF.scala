@@ -1017,9 +1017,8 @@ case class ScalaUDF(
     // Initialize user-defined function
     val funcClassName = s"scala.Function${children.size}"
 
-    val funcTerm = ctx.freshName("udf")
-    ctx.addMutableState(funcClassName, funcTerm,
-      s"this.$funcTerm = ($funcClassName)$scalaUDF.userDefinedFunc();")
+    val funcTerm = ctx.addNewTerm(funcClassName, "udf",
+      funcTerm => s"this.$funcTerm = ($funcClassName)$scalaUDF.userDefinedFunc();")
 
     // codegen for children expressions
     val evals = children.map(_.genCode(ctx))

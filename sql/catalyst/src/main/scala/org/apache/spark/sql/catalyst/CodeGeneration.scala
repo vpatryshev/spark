@@ -17,9 +17,30 @@
 
 package org.apache.spark.sql.catalyst
 
+import scala.util.Try
+
+import org.apache.spark.SparkEnv
 import org.apache.spark.sql.catalyst.expressions.codegen.CodegenContext
+import org.apache.spark.util.Utils
 
 class CodeGeneration {
-  def context: CodegenContext = new CodegenContext
+  def context: CodegenContext = {
+    System.out.print("using Original Code Generation reference\n")
+    new CodegenContext
+  }
+}
+
+object CodeGeneration {
+  def factory: CodeGeneration = {
+    val foundOrNot = for {
+      env <- Option(SparkEnv.get)
+      conf <- Option(env.conf)
+      className <- conf.getOption("spark.sql.codegen.factory")
+      clazz <- Try {Utils.classForName(className).asInstanceOf[Class[CodeGeneration]]}.toOption
+      instance <- Try {clazz.getDeclaredConstructor().newInstance()}.toOption
+    } yield instance
+
+    foundOrNot getOrElse new CodeGeneration
+  }
 }
 

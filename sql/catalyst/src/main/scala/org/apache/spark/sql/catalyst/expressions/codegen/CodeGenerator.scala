@@ -148,6 +148,12 @@ class CodegenContext {
   val mutableStates: mutable.ArrayBuffer[(String, String, String)] =
     mutable.ArrayBuffer.empty[(String, String, String)]
 
+  def addNewTerm(javaType: String, name: String, initCode: String => String): String = {
+    val funcTerm = freshName(name)
+    addMutableState(javaType, funcTerm, initCode(funcTerm))
+    funcTerm
+  }
+  
   def addMutableState(javaType: String, variableName: String, initCode: String): Unit = {
     mutableStates += ((javaType, variableName, initCode))
   }
@@ -865,19 +871,6 @@ class CodeAndComment(val body: String, val comment: collection.Map[String, Strin
  */
 abstract class CodeGenerator[InType <: AnyRef, OutType <: AnyRef] extends Logging {
 
-  def codeGenerationFactory: CodeGeneration = {
-    val foundOrNot = for {
-      env <- Option(SparkEnv.get)
-      conf <- Option(env.conf)
-      className <- conf.getOption("spark.sql.codegen.factory")
-      clazz <- Try {Utils.classForName(className).asInstanceOf[Class[CodeGeneration]]}.toOption
-      instance <- Try {clazz.getDeclaredConstructor().newInstance()}.toOption
-    } yield instance
-
-    foundOrNot getOrElse new CodeGeneration
-  }
-
-
   protected val genericMutableRowType: String = classOf[GenericInternalRow].getName
 
   /**
@@ -907,7 +900,7 @@ abstract class CodeGenerator[InType <: AnyRef, OutType <: AnyRef] extends Loggin
    * expressions that don't support codegen
    */
   def newCodeGenContext(): CodegenContext = {
-    codeGenerationFactory.context
+    CodeGeneration.factory.context
   }
 }
 
