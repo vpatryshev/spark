@@ -985,13 +985,12 @@ case class ScalaUDF(
     val expressionClassName = classOf[Expression].getName
     val scalaUDFClassName = classOf[ScalaUDF].getName
 
-    val converterTerm = ctx.freshName("converter")
     val expressionIdx = ctx.references.size - 1
-    ctx.addMutableState(converterClassName, converterTerm,
+    ctx.addNewTerm(converterClassName, "converter",
+      converterTerm =>
       s"this.$converterTerm = ($converterClassName)$typeConvertersClassName" +
         s".createToScalaConverter(((${expressionClassName})((($scalaUDFClassName)" +
-          s"references[$expressionIdx]).getChildren().apply($index))).dataType());")
-    converterTerm
+        s"references[$expressionIdx]).getChildren().apply($index))).dataType());")
   }
 
   override def doGenCode(
@@ -1003,10 +1002,10 @@ case class ScalaUDF(
     val typeConvertersClassName = CatalystTypeConverters.getClass.getName + ".MODULE$"
 
     // Generate codes used to convert the returned value of user-defined functions to Catalyst type
-    val catalystConverterTerm = ctx.freshName("catalystConverter")
-    ctx.addMutableState(converterClassName, catalystConverterTerm,
-      s"this.$catalystConverterTerm = ($converterClassName)$typeConvertersClassName" +
-        s".createToCatalystConverter($scalaUDF.dataType());")
+    val catalystConverterTerm =
+      ctx.addNewTerm(converterClassName, "catalystConverter",
+        catalystConverterTerm => s"this.$catalystConverterTerm = ($converterClassName)" +
+          s"$typeConvertersClassName.createToCatalystConverter($scalaUDF.dataType());")
 
     val resultTerm = ctx.freshName("result")
 
